@@ -4,38 +4,42 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 
 	"github.com/pborman/ansi"
 	"golang.org/x/exp/slices"
 )
 
-type button string
+type Button string
+type GameObject [][2]int
 
 const (
-	y             = 10
-	x             = 20
-	TOP    button = "W"
-	BOTTOM button = "S"
-	LEFT   button = "A"
-	RIGHT  button = "D"
-	CENTER button = ""
+	MAP_HEIGHT        = 10
+	MAP_WIDTH         = 20
+	TOP        Button = "W"
+	BOTTOM     Button = "S"
+	LEFT       Button = "A"
+	RIGHT      Button = "D"
+	CENTER     Button = ""
 )
 
-func DrawBorders(x int, y int) {
+var SKIP = [2]int{-1, -1}
+
+func DrawBorders() {
 	fmt.Print(ansi.RIS, "\r")
 
 	drawX := func() {
-		for i := 0; i < (x + 2); i++ {
+		for i := 0; i < (MAP_WIDTH + 2); i++ {
 			fmt.Print("#")
 		}
 		fmt.Println()
 	}
 
 	drawY := func() {
-		for i := 0; i < y; i++ {
+		for i := 0; i < MAP_HEIGHT; i++ {
 			res := ""
-			for j := 0; j < x; j++ {
+			for j := 0; j < MAP_WIDTH; j++ {
 				res += " "
 			}
 			fmt.Printf("#%s#\n", res)
@@ -52,67 +56,104 @@ func ResetCursor() {
 }
 
 func FixGreat() {
-	fmt.Print(ansi.CSI, y+4, ";0f")
+	fmt.Print(ansi.CSI, MAP_HEIGHT+4, ";0f")
 }
 
-func WriteHead(x int, y int) {
+func WriteImage(x int, y int, img string) {
 	ResetCursor()
-	for i := 0; i < y; i++ {
-		fmt.Print(ansi.CUD)
-	}
-	for i := 0; i < x; i++ {
-		fmt.Print(ansi.CUF)
-	}
-	fmt.Print("0")
+	fmt.Print(ansi.CSI, y+2, ";", x+2, "f")
+	fmt.Print(img)
 }
 
-func ReadMove() button {
+func ReadMove() Button {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter your move: ")
 	move, _ := reader.ReadString('\n')
-	move = strings.ToUpper(strings.TrimSuffix(move, "\n"))
-	if slices.Contains([]button{TOP, BOTTOM, RIGHT, LEFT}, button(move)) {
-		return button(move)
+	move = strings.ToUpper(
+		strings.TrimSuffix(move, "\n"),
+	)
+	if slices.Contains([]Button{
+		TOP,
+		BOTTOM,
+		RIGHT,
+		LEFT,
+	}, Button(move)) {
+		return Button(move)
 	}
 	return CENTER
 }
 
-func ShowFrame(posX int, posY int) {
-	DrawBorders(x, y)
+func ShowFrame(player GameObject) {
+	DrawBorders()
 	ResetCursor()
-	WriteHead(posX, posY)
-}
-
-func UpdatePosition(move button, posX *int, posY *int, mapX int, mapY int) {
-	switch move {
-	case TOP:
-		if (*posY - 1) >= 0 {
-			*posY--
-		}
-	case BOTTOM:
-		if (*posY + 1) < mapY {
-			*posY++
-		}
-	case LEFT:
-		if (*posX - 1) >= 0 {
-			*posX--
-		}
-	case RIGHT:
-		if (*posX + 1) < mapX {
-			*posX++
-		}
+	for _, val := range player {
+		WriteImage(val[0], val[1], "0")
 	}
 }
 
-func main() {
+func UpdatePosition(move Button, player GameObject) [2]int {
 	var (
-		posX = 0
-		posY = 0
+		x = player[0][0]
+		y = player[0][1]
 	)
+	switch move {
+	case TOP:
+		if (y - 1) >= 0 {
+			y--
+		} else {
+			y = MAP_HEIGHT - 1
+		}
+	case BOTTOM:
+		if (y + 1) < MAP_HEIGHT {
+			y++
+		} else {
+			y = 0
+		}
+	case LEFT:
+		if (x - 1) >= 0 {
+			x--
+		} else {
+			x = MAP_WIDTH - 1
+		}
+	case RIGHT:
+		if (x + 1) < MAP_WIDTH {
+			x++
+		} else {
+			x = 0
+		}
+	}
+	coords := [2]int{x, y}
+
+	for _, val := range player {
+		if reflect.DeepEqual(val, coords) {
+			return SKIP
+		}
+	}
+	return [2]int{x, y}
+}
+
+func MovePlayer(x int, y int, player *GameObject) {
+	*player = append(
+		GameObject{{x, y}},
+		(*player)[:len((*player))-1]...,
+	)
+}
+
+func main() {
+	player := GameObject{{0, 0}, {1, 0}, {1, 1}}
+
+	ShowFrame(player)
+	FixGreat()
 
 	for {
-		ShowFrame(posX, posY)
+		ShowFrame(player)
 		FixGreat()
-		UpdatePosition(ReadMove(), &posX, &posY, x, y)
+
+		move := ReadMove()
+
+		coords := UpdatePosition(move, player)
+		if !reflect.DeepEqual(coords, SKIP) {
+			MovePlayer(coords[0], coords[1], &player)
+		}
 	}
 }
