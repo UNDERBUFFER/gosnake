@@ -7,11 +7,19 @@ import (
 	"strings"
 
 	"github.com/pborman/ansi"
+	"golang.org/x/exp/slices"
 )
 
+type button string
+
 const (
-	y = 10
-	x = 20
+	y             = 10
+	x             = 20
+	TOP    button = "W"
+	BOTTOM button = "S"
+	LEFT   button = "A"
+	RIGHT  button = "D"
+	CENTER button = ""
 )
 
 func DrawBorders(x int, y int) {
@@ -44,7 +52,7 @@ func ResetCursor() {
 }
 
 func FixGreat() {
-	fmt.Print(ansi.CSI, y + 4, ";0f")
+	fmt.Print(ansi.CSI, y+4, ";0f")
 }
 
 func WriteHead(x int, y int) {
@@ -58,13 +66,15 @@ func WriteHead(x int, y int) {
 	fmt.Print("0")
 }
 
-func ReadMove() string {
+func ReadMove() button {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("Enter your move: ")
 	move, _ := reader.ReadString('\n')
-	move = strings.TrimSuffix(move, "\n")
-	fmt.Print(ansi.CUU, ansi.DL)
-	return move
+	move = strings.ToUpper(strings.TrimSuffix(move, "\n"))
+	if slices.Contains([]button{TOP, BOTTOM, RIGHT, LEFT}, button(move)) {
+		return button(move)
+	}
+	return CENTER
 }
 
 func ShowFrame(posX int, posY int) {
@@ -73,36 +83,36 @@ func ShowFrame(posX int, posY int) {
 	WriteHead(posX, posY)
 }
 
+func UpdatePosition(move button, posX *int, posY *int, mapX int, mapY int) {
+	switch move {
+	case TOP:
+		if (*posY - 1) >= 0 {
+			*posY--
+		}
+	case BOTTOM:
+		if (*posY + 1) < mapY {
+			*posY++
+		}
+	case LEFT:
+		if (*posX - 1) >= 0 {
+			*posX--
+		}
+	case RIGHT:
+		if (*posX + 1) < mapX {
+			*posX++
+		}
+	}
+}
+
 func main() {
-	// defer FixGreat()
 	var (
 		posX = 0
 		posY = 0
 	)
-	ShowFrame(posX, posY)
-	FixGreat()
 
 	for {
-		switch ReadMove() {
-		case "S":
-			if posY < (y - 1) {
-				posY++
-			}
-		case "D":
-			if posX < (x - 1) {
-				posX++
-			}
-		case "W":
-			if (posY - 1) >= 0 {
-				posY--
-			}
-		case "A":
-			if (posX - 1) >= 0 {
-				posX--
-			}
-		}
 		ShowFrame(posX, posY)
 		FixGreat()
+		UpdatePosition(ReadMove(), &posX, &posY, x, y)
 	}
-
 }
