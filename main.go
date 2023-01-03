@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"reflect"
 	"strings"
@@ -12,16 +13,21 @@ import (
 )
 
 type Button string
+type Position int
 type GameObject [][2]int
 
 const (
-	MAP_HEIGHT        = 10
-	MAP_WIDTH         = 20
-	TOP        Button = "W"
-	BOTTOM     Button = "S"
-	LEFT       Button = "A"
-	RIGHT      Button = "D"
-	CENTER     Button = ""
+	MAP_HEIGHT             = 10
+	MAP_WIDTH              = 20
+	FRUITS_COUNT           = 5
+	FAIL_POS      Position = 0
+	UPDATE_POS    Position = 1
+	UPDATE_PLAYER Position = 2
+	TOP           Button   = "W"
+	BOTTOM        Button   = "S"
+	LEFT          Button   = "A"
+	RIGHT         Button   = "D"
+	CENTER        Button   = ""
 )
 
 var SKIP = [2]int{-1, -1}
@@ -83,15 +89,24 @@ func ReadMove() Button {
 	return CENTER
 }
 
-func ShowFrame(player GameObject) {
+func ShowFrame(
+	player GameObject,
+	fruits GameObject,
+) {
 	DrawBorders()
 	ResetCursor()
+	for _, val := range fruits {
+		WriteImage(val[0], val[1], "🍎")
+	}
 	for _, val := range player {
-		WriteImage(val[0], val[1], "0")
+		WriteImage(val[0], val[1], "▩")
 	}
 }
 
-func UpdatePosition(move Button, player GameObject) [2]int {
+func UpdatePosition(
+	move Button,
+	player GameObject,
+) [2]int {
 	var (
 		x = player[0][0]
 		y = player[0][1]
@@ -129,31 +144,80 @@ func UpdatePosition(move Button, player GameObject) [2]int {
 			return SKIP
 		}
 	}
-	return [2]int{x, y}
+	return coords
 }
 
-func MovePlayer(x int, y int, player *GameObject) {
+func MoveObjects(
+	x int,
+	y int,
+	player *GameObject,
+	fruits *GameObject,
+) {
+	head := [2]int{x, y}
+	length := len(*player) - 1
+
+	for idx, val := range *fruits {
+		if reflect.DeepEqual(val, head) {
+			length = len(*player)
+			*fruits = append(
+				(*fruits)[:idx],
+				(*fruits)[idx+1:]...
+			)
+			break
+		}
+	}
+
 	*player = append(
-		GameObject{{x, y}},
-		(*player)[:len((*player))-1]...,
+		GameObject{head},
+		(*player)[:length]...,
 	)
 }
 
-func main() {
-	player := GameObject{{0, 0}, {1, 0}, {1, 1}}
+func SetupFruits(
+	fruits *GameObject,
+	player GameObject,
+) {
+	Loop:
+	for len(*fruits) < FRUITS_COUNT {
+		coords := [2]int{
+			rand.Intn(MAP_WIDTH),
+			rand.Intn(MAP_HEIGHT),
+		}
 
-	ShowFrame(player)
-	FixGreat()
+		for _, val := range player {
+			if reflect.DeepEqual(val, coords) {
+				continue Loop
+			}
+		}
+
+		*fruits = append(
+			*fruits,
+			coords,
+		)
+	}
+}
+
+func main() {
+	player := GameObject{{0, 0}}
+	fruits := GameObject{}
 
 	for {
-		ShowFrame(player)
+		SetupFruits(&fruits, player)
+		ShowFrame(player, fruits)
 		FixGreat()
 
+		fmt.Print(ansi.CSI, MAP_HEIGHT+6, ";0f")
+		fmt.Println(player, "|", fruits)
 		move := ReadMove()
-
 		coords := UpdatePosition(move, player)
+
 		if !reflect.DeepEqual(coords, SKIP) {
-			MovePlayer(coords[0], coords[1], &player)
+			MoveObjects(
+				coords[0],
+				coords[1],
+				&player,
+				&fruits,
+			)
 		}
 	}
 }
